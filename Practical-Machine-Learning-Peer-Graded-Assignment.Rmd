@@ -1,0 +1,112 @@
+---
+title: "Practical Machine Learning Week 4 Peer Graded Assignment"
+author: "Jeffrey Waitkevich"
+date: "February 18, 2020"
+output: html_document
+---
+
+## Background
+*Background description was provided for the Coursera class "Practical Machine Learning" and was pasted from the assignment directions*
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity 
+relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about 
+themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly 
+do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use 
+data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and 
+incorrectly in 5 different ways. More information is available from the website here: 
+http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+## Data
+*Dataset description was provided for the Coursera class "Practical Machine Learning" and was pasted from the assignment directions*
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+## Loading Packages and Data
+Ensure that the folllowing packages have been installed and run using the "install.packages" function and "library" function respectively.
+```{r echo=TRUE, include=FALSE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RGtk2)
+library(rattle)
+library(randomForest)
+library(gbm)
+```
+Next, load in the datasets and assign them to the appropriate variables.
+```{r}
+testdata <- read.csv("pml-testing.csv")
+traindata <- read.csv("pml-training.csv")
+```
+
+## Cleaning the Data
+The first step is to remove the variables that have nearly zero variance or NA values (threshhold of .95).
+```{r}
+nzv <- nearZeroVar(traindata)
+testdata1 <- testdata[,-nzv]
+traindata1 <- traindata[,-nzv]
+
+navals <- sapply(traindata1, function(x) mean(is.na(x))) > 0.95
+testdata2 <- testdata1[,navals==FALSE]
+traindata2 <- traindata1[,navals==FALSE]
+```
+
+The first 7 columns are irrelevant to prediction, so we want to remove those.
+```{r}
+traindata2 <- traindata2[, -c(1:7)]
+testdata2 <- testdata2[, -c(1:7)]
+```
+
+The last step of data preparation is to partition the data into a training set and test set. The training set will be 60% of the data and the test set will be the other 40%.
+
+```{r}
+intrain <- createDataPartition(traindata2$classe, p=0.6, list=FALSE)
+trainingset <- traindata2[intrain,]
+testingset <- traindata2[-intrain,]
+```
+## Training the Data
+The data will be trained using three different types of models: decision tree model, random forest model, and gradient boosting model. The best one will be used to predict the test data using "testdata2".
+
+### Decision Tree Model
+```{r}
+dtmtrain <- train(classe~., data = trainingset, method = "rpart")
+dtmpredict <- predict(dtmtrain, testingset)
+confusionMatrix(dtmpredict, testingset$classe)
+```
+The prediction accuracy is only 49.26%, so this is not nearly good enough of a predictor. However, we can still take a look at the plot.
+```{r}
+rpart.plot(dtmtrain$finalModel, roundint=FALSE)
+```
+
+### Random Forest Model
+```{r}
+rfmtrain <- train(classe~., data=trainingset, method="rf", ntree=100)
+rfmpredict <- predict(rfmtrain, testingset)
+rfmconf <- confusionMatrix(rfmpredict, testingset$classe)
+rfmconf
+```
+
+Because the prediction accuracy is so high -- 99.07% -- this model is good enough to use. However, we still want to see if the gradient boosting model is better.
+
+### Gradient Boosting Model
+```{r}
+gbmtrain <- train(classe~.,data=trainingset, method="gbm", verbose=FALSE)
+gbmpredict <- predict(gbmtrain, testingset)
+gbmconf <- confusionMatrix(gbmpredict, testingset$classe)
+gbmconf
+```
+The gradiant boosting model also has a high enough accuracy -- 95.64%. With this information, we will be able to make a conclusion on which model to use.
+
+## Conclusion and Final Test
+Because the random forest model had the highest accuracy at over 99%, we will use that model to test on "testdata2".
+```{r}
+rfmpredictfin <- predict(rfmtrain, testdata2)
+rfmpredictfin
+```
